@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Delta / HCSS — App (Serviços e Estoque) - 100% OK</title>
+<style>
+/* NOVO LAYOUT ROSA DEGRADEE */
+:root{
+  --bg:#2e0c1b; --panel:#441128; --muted:#f9a7d2; --text:#ffffff;
+  --primary:#f00078; --primary-700:#a3004a; --accent:#ff50a0;
+  --ring:#ff78c0; --good:#22c55e; --warn:#f59e0b; --bad:#ef4444;
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans}
+header.app{position:sticky;top:0;z-index:50;background:var(--panel);border-bottom:1px solid #5a1435;box-shadow:var(--shadow)}
+.header-inner{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 12px}
+.brand{display:flex;gap:10px;align-items:center}
+.brand .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(120deg,var(--primary),var(--accent))}
+.brand h1{margin:0;font-size:16px}
+.nav{display:flex;gap:6px;flex-wrap:wrap}
+.nav button{background:transparent;border:1px solid transparent;color:var(--muted);padding:8px 10px;border-radius:10px;cursor:pointer}
+.nav button.active{border-color:var(--primary);color:var(--text);background:#551936}
+.btn{border:1px solid #732247;background:#571735;color:var(--text);border-radius:12px;padding:10px 14px;cursor:pointer}
+.btn:hover{border-color:var(--ring)}
+.container{max-width:1100px;margin:16px auto;padding:10px}
+.card{background:var(--panel);border:1px solid #5a1435;border-radius:16px;box-shadow:var(--shadow)}
+.card header{padding:12px 14px;border-bottom:1px solid #5a1435;display:flex;justify-content:space-between;align-items:center}
+.card .content{padding:14px}
+.grid{display:grid;gap:10px}
+.grid.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:900px){ .grid.cols-3{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media(max-width:640px){ .grid.cols-2,.grid.cols-3{grid-template-columns:1fr} }
+input,select,textarea{width:100%;min-height:44px;border-radius:12px;border:1px solid #732247;background:#3c0f24;color:var(--text);padding:8px 10px}
+label{font-size:13px;color:#f9a7d2}
+hr.sep{border:0;border-top:1px solid #6e1c44;margin:14px 0}
+/* FAB Premium */
+.fabbar{position:fixed;right:14px;bottom:18px;display:flex;gap:10px;z-index:60}
+.fab{width:56px;height:56px;border-radius:50%;border:1px solid #732247;background:linear-gradient(120deg,var(--accent),var(--primary));display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);cursor:pointer}
+.fab svg{width:24px;height:24px;fill:#4f062d}
+/* Login */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login{width:min(560px,96vw)} .login .content{padding:16px}
+.hidden{display:none !important}
+/* Catalog modal */
+#catalog-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:100; }
+#catalog-modal{ background:var(--panel); color:#ffffff; width:min(96vw,900px); max-height:86vh; overflow:auto; border-radius:12px; border:1px solid #5a1435; box-shadow:var(--shadow); }
+#catalog-modal header{ display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid #5a1435; position:sticky; top:0; background:var(--panel); z-index:2;}
+#catalog-modal .content{ padding:12px 16px; }
+#catalog-modal table{ width:100%; border-collapse:collapse; }
+#catalog-modal th, #catalog-modal td{ padding:8px; border-bottom:1px solid #6c2145; text-align:left; }
+#catalog-modal input{ width:100%; min-height:38px; font-size:14px; padding:6px 8px; border:1px solid #7a264a; border-radius:8px; background:#3c0f24; color:#ffffff; text-align:left; }
+#catalog-modal .actions{ display:flex; gap:8px; justify-content:flex-end; padding:12px 16px; border-top:1px solid #5a1435; position:sticky; bottom:0; background:var(--panel); }
+.t-right{text-align:right}
+.small{font-size:12px;color:#f9a7d2}
+.code{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; background:#3c0f24; border:1px solid #732247; padding:2px 6px; border-radius:6px}
+/* Success/error toasts */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--panel);border:1px solid #5a1435;border-radius:10px;padding:10px 14px;z-index:200;box-shadow:var(--shadow)}
+</style>
+</head>
+<body>
+<header class="app">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="logo"></div>
+      <h1>Delta / HCSS — App (Verificado)</h1>
+    </div>
+    <div class="nav" id="tabs"></div>
+    <div>
+      <button class="btn" id="btnLogout" title="Sair">Sair</button>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div id="appRoot"></div>
+</div>
+
+<div id="catalog-overlay" aria-hidden="true">
+  <div id="catalog-modal" role="dialog" aria-modal="true" aria-labelledby="catalog-title">
+    <header>
+      <h3 id="catalog-title">Gerenciar Catálogo</h3>
+      <div style="display:flex; gap:10px;">
+        <button class="btn" id="catalog-add" title="Adicionar Novo Item">Adicionar Item</button>
+        <button class="btn" id="catalog-close">Fechar</button>
+      </div>
+    </header>
+    <div class="content">
+      <p class="small" id="catalog-instructions"></p>
+      <div style="overflow:auto">
+        <table id="catalog-table">
+          <thead>
+            <tr id="catalog-table-header"></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="catalog-reset">Restaurar padrões</button>
+      <button class="btn" id="catalog-save" style="border-color:var(--primary);background:var(--primary-700)">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="fabbar">
+  <div class="fab" id="fab-export" title="Exportar">
+    <svg viewBox="0 0 24 24"><path d="M12 3l4 4h-3v6h-2V7H8l4-4zm-7 9h2v7h10v-7h2v9H5v-9z"/></svg>
+  </div>
+  <div class="fab" id="fab-import" title="Importar (merge)">
+    <svg viewBox="0 0 24 24"><path d="M12 21l-4-4h3V11h2v6h3l-4 4zM5 4h14v9h-2V6H7v7H5V4z"/></svg>
+    <input type="file" id="importFile" accept="application/json" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px">
+  </div>
+  <div class="fab" id="fab-share" title="Compartilhar">
+    <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.02-4.11A2.99 2.99 0 0018 7a3 3 0 10-3-3c0 .24.04.47.09.7L8.07 8.81A3 3 0 006 8a3 3 0 100 6c.74 0 1.41-.27 1.93-.72l7.18 4.2c-.07.25-.11.5-.11.77a3 3 0 103-3z"/></svg>
+  </div>
+  <div class="fab" id="fab-lock" title="Bloquear (exigir senha)">
+    <svg viewBox="0 0 24 24"><path d="M12 17a2 2 0 110-4 2 2 0 010 4zm6-6h-1V9a5 5 0 00-10 0v2H6a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2zm-7 0H9V9a3 3 0 116 0v2h-2z"/></svg>
+  </div>
+</div>
+
+<script>
+/* ===================== CORE STATE & CONSTANTS ======================= */
+const SESSION_KEY = "DELTA_SESS_OK";
+const STORAGE_KEY = "DELTA_APP_STATE_V2"; // Versão atualizada do storage
+const USER_FIXED = "172.895.088-07";
+const PASS_FIXED = "Delta@1234";
+
+// --- SERVIÇOS ---
+const NORMAL_DEFAULTS = [
+  { nome: "Selagem", preco: 150, duracao: 90 },
+  { nome: "Unha das mãos", preco: 35, duracao: 40 },
+  { nome: "Unha dos pés", preco: 45, duracao: 50 },
+  { nome: "Unha das mãos e dos pés", preco: 70, duracao: 90 },
+  { nome: "Depilação (Buço)", preco: 25, duracao: 15 },
+  { nome: "Sobrancelha (c/ Rena)", preco: 40, duracao: 30 },
+  { nome: "Hidratação", preco: 70, duracao: 45 },
+];
+const PROMO_DEFAULTS = [
+  { nome: "Selagem", preco: 139, duracao: 85 },
+  { nome: "Unha das mãos", preco: 32, duracao: 40 },
+  { nome: "Unha dos pés", preco: 42, duracao: 50 },
+  { nome: "Unha das mãos e dos pés", preco: 65, duracao: 85 },
+  { nome: "Depilação (Buço)", preco: 22, duracao: 15 },
+  { nome: "Sobrancelha (c/ Rena)", preco: 38, duracao: 30 },
+  { nome: "Hidratação", preco: 65, duracao: 45 },
+];
+const PROMO_UNTIL = new Date('2025-12-31T23:59:59-03:00').getTime();
+const SERVICE_DEFAULTS = (Date.now() <= PROMO_UNTIL) ? PROMO_DEFAULTS : NORMAL_DEFAULTS;
+
+// --- PRODUTOS ---
+const PRODUCT_DEFAULTS = [
+    { nome: "Shampoo Profissional", preco: 80, qtd: 10 },
+    { nome: "Condicionador Matizador", preco: 90, qtd: 15 },
+    { nome: "Kit Manutenção Home Care", preco: 150, qtd: 8 },
+];
+
+let state = loadState() || {
+  profissionais: [
+    { nome: "Fátima Alonso", pct: 50 }, 
+    { nome: "Cabelereira 1", pct: 40 },
+    { nome: "Manicure 1", pct: 50 },
+  ],
+  // Catálogos Separados
+  servicos_catalogo: SERVICE_DEFAULTS.map(d=>({ nome:d.nome, preco:d.preco, duracao:d.duracao })),
+  produtos_estoque: PRODUCT_DEFAULTS.map(d=>({...d})),
+  vendas: [],
+  pagamentos: [],
+  config: { tabletMode: true },
+  lastUpdated: Date.now() 
+};
+let currentCatalogType = null; // 'servico' or 'produto'
+
+function saveState(){ 
+  state.lastUpdated = Date.now();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); 
+}
+function loadState(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||""); }catch(_){ return null; } }
+function toast(t){ const el=document.createElement('div');el.className='toast';el.textContent=t;document.body.appendChild(el);setTimeout(()=>{el.remove()},2200); }
+function onlyDigits(s){ return (s||"").replace(/\D+/g,""); }
+function formatCPF(d){
+  d = onlyDigits(d).slice(0,11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return d.replace(/(\d{3})(\d+)/, "$1.$2");
+  if (d.length <= 9) return d.replace(/(\d{3})(\d{3})(\d+)/, "$1.$2.$3");
+  return d.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2}).*/, (_,a,b,c,d4)=> d4? `${a}.${b}.${c}-${d4}` : `${a}.${b}.${c}`);
+}
+
+function setAuthUI(isOn){
+  document.getElementById('btnLogout').classList.toggle('hidden', !isOn);
+  renderTabs(isOn);
+}
+function isLogged(){ return localStorage.getItem(SESSION_KEY) === "1"; }
+function login(user, pass){
+  const refU = onlyDigits(USER_FIXED);
+  const inU = onlyDigits(user);
+  if (inU === refU && pass === PASS_FIXED){
+    localStorage.setItem(SESSION_KEY, "1");
+    setAuthUI(true);
+    renderPage('Dashboard');
+    return true;
+  }
+  return false;
+}
+function logout(){
+  localStorage.removeItem(SESSION_KEY);
+  setAuthUI(false);
+  renderLogin();
+}
+
+/* ===================== RENDERERS ======================= */
+function renderTabs(auth){
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = "";
+  const items = auth ? ["Dashboard","Vendas","Pagamentos","Profissionais","Catálogo","Relatórios","Configurações"] : ["Login"];
+  items.forEach(name=>{
+    const b = document.createElement('button');
+    b.textContent = name; b.className = "active btn-lite";
+    b.onclick = ()=> renderPage(name);
+    tabs.appendChild(b);
+  });
+}
+
+function getProfissionaisOptions(){
+    return state.profissionais.map(p=>`<option>${p.nome}</option>`).join("");
+}
+
+/**
+ * Retorna as opções para o <select> de Vendas, unindo Serviços e Produtos.
+ * O valor (value) é formatado como TIPO|NOME, onde TIPO é S (serviço) ou P (produto).
+ */
+function getAllItemsOptions(){
+    let options = '<option value="">-- Selecione um Serviço ou Produto --</option>';
+    
+    // 1. Serviços
+    options += state.servicos_catalogo
+        .map(s => `<option value="S|${s.nome}">[Serviço] ${s.nome} (R$ ${s.preco.toFixed(2).replace('.', ',')})</option>`)
+        .join("");
+
+    // 2. Produtos (só lista produtos em estoque > 0)
+    options += state.produtos_estoque
+        .filter(p => p.qtd > 0)
+        .map(p => `<option value="P|${p.nome}">[Produto] ${p.nome} (Estoque: ${p.qtd})</option>`)
+        .join("");
+    
+    return options;
+}
+
+function renderPage(name){
+  if (!isLogged() && name !== "Login"){ return renderLogin(); }
+  const root = document.getElementById('appRoot');
+  
+  document.querySelectorAll('#tabs button').forEach(b => {
+      b.classList.remove('active');
+      if (b.textContent === name) {
+          b.classList.add('active');
+      }
+  });
+
+  if (name==="Dashboard"){
+    root.innerHTML = `
+      <div class="card">
+        <header><div>Dashboard</div></header>
+        <div class="content">
+          <div class="grid cols-3">
+            <div class="card"><header><div>Vendas (hoje)</div></header><div class="content"><div id="boxVendasHoje">0</div></div></div>
+            <div class="card"><header><div>Receita (R$)</div></header><div class="content"><div id="boxReceita">0,00</div></div></div>
+            <div class="card"><header><div>Comissão Pendente (R$)</div></header><div class="content"><div id="boxPendente">0,00</div></div></div>
+          </div>
+        </div>
+      </div>`;
+    updateDashboard();
+  }
+  if (name==="Vendas"){
+    const optsProf = getProfissionaisOptions();
+    const optServProd = getAllItemsOptions();
+    root.innerHTML = `
+    <div class="card">
+      <header><div>Vendas</div></header>
+      <div class="content">
+        <div class="grid cols-2">
+          <div>
+            <label>Profissional</label>
+            <select id="sProf">${optsProf}</select>
+          </div>
+          <div>
+            <label>Serviço / Produto</label>
+            <select id="sItem" onchange="syncItemDetails(this.value)">${optServProd}</select>
+          </div>
+          <div id="divQtd" class="hidden">
+            <label>Quantidade Vendida</label>
+            <input id="sQtd" type="number" min="1" step="1" value="1">
+          </div>
+          <div id="divPreco">
+            <label>Preço Unitário/Total (R$)</label>
+            <input id="sPreco" type="number" min="0" step="0.5">
+          </div>
+          <div id="divDur" class="hidden">
+            <label>Duração (min)</label>
+            <input id="sDur" type="number" min="0" step="5">
+          </div>
+        </div>
+        <hr class="sep">
+        <button class="btn" id="btnAddVenda" disabled>Adicionar Venda</button>
+      </div>
+    </div>`;
+    
+    const sItem = document.getElementById('sItem');
+    const btnAddVenda = document.getElementById('btnAddVenda');
+    sItem.onchange = (e) => syncItemDetails(e.target.value); 
+    
+    syncItemDetails(sItem.value); // Inicializa os campos
+
+    btnAddVenda.onclick = registerVenda;
+  }
+  if (name==="Pagamentos"){
+    const optsProf = getProfissionaisOptions();
+    root.innerHTML = `
+    <div class="card">
+      <header><div>Pagamentos</div></header>
+      <div class="content">
+        <div class="grid cols-2">
+          <div>
+            <label>Profissional</label>
+            <select id="pgProf">${optsProf}</select>
+          </div>
+          <div>
+            <label>Valor a pagar (R$)</label>
+            <input id="pgValor" type="number" min="0" step="0.5">
+          </div>
+        </div>
+        <hr class="sep">
+        <button class="btn" id="btnRegPg">Registrar Pagamento</button>
+      </div>
+    </div>`;
+    document.getElementById('btnRegPg').onclick = ()=>{
+      const prof = document.getElementById('pgProf').value;
+      const valor = Number(document.getElementById('pgValor').value||0);
+      
+      if (!prof) return alert("Selecione um profissional.");
+      if (valor <= 0) return alert("O valor do pagamento deve ser maior que zero.");
+
+      state.pagamentos.push({ ts: Date.now(), prof, valor });
+      saveState(); toast("Pagamento registrado");
+      updateDashboard();
+    };
+  }
+  if (name==="Profissionais"){
+    renderPageProfissionais(); 
+  }
+  if (name==="Catálogo"){
+    root.innerHTML = `
+      <div class="grid cols-2">
+        <div class="card">
+          <header><div>Gerenciar Catálogo de Serviços</div></header>
+          <div class="content">
+            <p>Defina o preço e a duração dos serviços oferecidos.</p>
+            <button class="btn" onclick="openCatalog('servico')">Gerenciar Serviços</button>
+          </div>
+        </div>
+        <div class="card">
+          <header><div>Gerenciar Catálogo de Produtos (Estoque)</div></header>
+          <div class="content">
+            <p>Defina o preço e a quantidade em estoque dos produtos para revenda.</p>
+            <button class="btn" onclick="openCatalog('produto')">Gerenciar Produtos</button>
+          </div>
+        </div>
+      </div>`;
+  }
+  if (name==="Relatórios"){
+    renderPageRelatorios();
+  }
+  if (name==="Configurações"){
+    root.innerHTML = `
+    <div class="card">
+      <header><div>Configurações</div></header>
+      <div class="content">
+        <div class="grid cols-2">
+          <div>
+            <label>Modo Tablet</label>
+            <select id="cfgTablet">
+              <option value="true"${state.config.tabletMode?" selected":""}>Ativo</option>
+              <option value="false"${!state.config.tabletMode?" selected":""}>Desativado</option>
+            </select>
+          </div>
+          <div>
+            <label>Última Atualização dos Dados</label>
+            <input disabled value="${new Date(state.lastUpdated||0).toLocaleString('pt-BR')}">
+          </div>
+        </div>
+        <hr class="sep">
+        <button class="btn" onclick="renderPage('Catálogo')">Editar Catálogos (Serviços/Produtos)</button>
+      </div>
+    </div>`;
+    document.getElementById('cfgTablet').onchange = (e)=>{
+      state.config.tabletMode = (e.target.value==="true");
+      saveState(); toast("Configuração salva");
+    };
+  }
+}
+
+function syncItemDetails(value){
+    const [tipo, nome] = value.split('|');
+    const sPreco = document.getElementById('sPreco');
+    const sDur = document.getElementById('sDur');
+    const sQtd = document.getElementById('sQtd');
+    const divDur = document.getElementById('divDur');
+    const divQtd = document.getElementById('divQtd');
+    const btnAddVenda = document.getElementById('btnAddVenda');
+
+    btnAddVenda.disabled = true;
+
+    if (!tipo) {
+        sPreco.value = ''; sDur.value = ''; sQtd.value = 1;
+        divDur.classList.add('hidden'); divQtd.classList.add('hidden');
+        return;
+    }
+    
+    btnAddVenda.disabled = false;
+
+    if (tipo === 'S') { // Serviço
+        const serv = state.servicos_catalogo.find(x => x.nome === nome) || SERVICE_DEFAULTS.find(x => x.nome === nome);
+        sPreco.value = serv ? serv.preco : 0;
+        sDur.value = serv ? serv.duracao : 0;
+        sQtd.value = 1;
+
+        divDur.classList.remove('hidden');
+        divQtd.classList.add('hidden');
+
+    } else if (tipo === 'P') { // Produto
+        const prod = state.produtos_estoque.find(x => x.nome === nome);
+        sPreco.value = prod ? prod.preco : 0;
+        sDur.value = 0;
+        sQtd.value = 1;
+        
+        divDur.classList.add('hidden');
+        divQtd.classList.remove('hidden');
+        sQtd.setAttribute('max', prod ? prod.qtd : 1);
+    }
+}
+
+function registerVenda(){
+    const profName = document.getElementById('sProf').value;
+    const itemValue = document.getElementById('sItem').value;
+    const sPrecoInput = document.getElementById('sPreco');
+    const sDurInput = document.getElementById('sDur');
+    const sQtdInput = document.getElementById('sQtd');
+
+    const [tipo, nome] = itemValue.split('|');
+    const prof = state.profissionais.find(p=>p.nome===profName);
+
+    const qtd = (tipo === 'P') ? Number(sQtdInput.value||1) : 1;
+    const precoUnitario = Number(sPrecoInput.value||0);
+    const precoTotal = precoUnitario * qtd;
+    const dur = (tipo === 'S') ? Number(sDurInput.value||0) : 0;
+
+    if (!profName) return alert("Selecione um profissional.");
+    if (!tipo) return alert("Selecione um serviço ou produto.");
+    if (precoUnitario <= 0) return alert("O preço da venda deve ser maior que zero.");
+    if (qtd <= 0) return alert("A quantidade vendida deve ser maior que zero.");
+
+    // CÁLCULO DE COMISSÃO
+    const comissao = (prof ? (precoTotal * (prof.pct||0) / 100) : 0);
+    
+    if (tipo === 'P') {
+        const prodIndex = state.produtos_estoque.findIndex(p => p.nome === nome);
+        const prod = state.produtos_estoque[prodIndex];
+        if (prodIndex === -1 || prod.qtd < qtd) {
+            return alert(`Estoque insuficiente! Apenas ${prod.qtd} unidades de ${nome} disponíveis.`);
+        }
+        prod.qtd -= qtd; // DEDUÇÃO DE ESTOQUE
+    }
+
+    state.vendas.push({ ts: Date.now(), prof: profName, tipo, nome, preco: precoTotal, dur, comissao, qtd });
+    saveState(); 
+    toast(`Venda de ${nome} (${qtd}x) registrada`);
+    updateDashboard();
+
+    // Recarrega as opções de venda para refletir a mudança no estoque
+    document.getElementById('sItem').innerHTML = getAllItemsOptions();
+    syncItemDetails(document.getElementById('sItem').value);
+}
+
+function updateDashboard(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayTS = today.getTime();
+  
+  const vendasHoje = state.vendas.filter(v=>{ const d=new Date(v.ts); d.setHours(0,0,0,0); return d.getTime()===todayTS; });
+  const receita = vendasHoje.reduce((a,b)=>a+(b.preco||0),0);
+  
+  const totalComissoes = state.vendas.reduce((sum, v) => sum + (v.comissao || 0), 0);
+  const totalPagamentos = state.pagamentos.reduce((sum, p) => sum + (p.valor || 0), 0);
+  const pendente = totalComissoes - totalPagamentos;
+
+  const el1 = document.getElementById('boxVendasHoje'); if(el1) el1.textContent = vendasHoje.length;
+  const el2 = document.getElementById('boxReceita'); if(el2) el2.textContent = receita.toFixed(2).replace(".",",");
+  const el3 = document.getElementById('boxPendente'); if(el3) el3.textContent = pendente.toFixed(2).replace(".",",");
+}
+
+/* ===================== LOGIN PAGE ======================= */
+function renderLogin(){
+  const root = document.getElementById('appRoot');
+  root.innerHTML = `
+  <div class="login-wrap">
+    <div class="card login">
+      <header><div>Acesso Restrito</div></header>
+      <div class="content">
+        <div class="grid cols-2">
+          <div>
+            <label>CPF</label>
+            <input id="user" inputmode="numeric" placeholder="000.000.000-00">
+          </div>
+          <div>
+            <label>Senha</label>
+            <input id="pass" type="password" placeholder="Sua senha">
+          </div>
+        </div>
+        <hr class="sep">
+        <button class="btn" id="btnLogin">Entrar</button>
+        <p class="small">Use as credenciais: CPF: 172.895.088-07 | Senha: Delta@1234</p>
+      </div>
+    </div>
+  </div>`;
+  const u = document.getElementById('user');
+  const p = document.getElementById('pass');
+  const b = document.getElementById('btnLogin');
+  function formatInput(){ u.value = formatCPF(u.value); }
+  u.addEventListener('input', formatInput); formatInput();
+  [u,p].forEach(el=> el.addEventListener('keydown', ev=>{ if(ev.key==="Enter"){ b.click(); }}));
+  b.onclick = ()=>{
+    const ok = login(u.value, p.value);
+    if(!ok) alert("Usuário ou senha inválidos.");
+  };
+}
+
+/* ===================== PROFISSIONAIS (CRUD) ======================= */
+function renderPageProfissionais(){
+    const root = document.getElementById('appRoot');
+    const optsProf = `<option value="">-- Selecione um Profissional --</option>` + getProfissionaisOptions();
+    
+    root.innerHTML = `
+    <div class="card">
+        <header><div>Adicionar Novo Profissional</div></header>
+        <div class="content">
+            <div class="grid cols-2" id="prof-form">
+                <div>
+                    <label>Nome Completo do Novo Profissional</label>
+                    <input id="newProfName" placeholder="Nome Completo">
+                </div>
+                <div>
+                    <label>Comissão Inicial (%)</label>
+                    <input id="newProfPct" type="number" min="0" max="100" value="50">
+                </div>
+            </div>
+            <hr class="sep">
+            <button class="btn" id="btnAddProf">Adicionar Profissional</button>
+        </div>
+    </div>
+    
+    <div class="card" style="margin-top: 16px;">
+        <header><div>Ajustar Comissão de Profissional Existente</div></header>
+        <div class="content">
+            <div class="grid cols-2">
+                <div>
+                    <label>Profissional</label>
+                    <select id="editProfSelect" onchange="loadProfCommission(this.value)">${optsProf}</select>
+                </div>
+                <div>
+                    <label>Nova Comissão (%)</label>
+                    <input id="editProfPct" type="number" min="0" max="100" disabled>
+                </div>
+            </div>
+            <hr class="sep">
+            <button class="btn" id="btnEditProf" disabled>Salvar Nova Comissão</button>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+        <header><div>Profissionais Ativos (Tabela Completa)</div></header>
+        <div class="content">
+            <div style="overflow-x: auto;">
+                <table id="profTable" style="width: 100%; min-width: 400px;">
+                    <thead><tr><th>Nome</th><th class="t-right">Comissão (%)</th><th style="width:50px"></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>`;
+
+    document.getElementById('btnAddProf').onclick = addProfissional;
+    document.getElementById('btnEditProf').onclick = saveEditedCommission;
+    updateProfTable();
+}
+
+function loadProfCommission(name){
+    const pctInput = document.getElementById('editProfPct');
+    const saveBtn = document.getElementById('btnEditProf');
+    
+    if (name === "") {
+        pctInput.value = "";
+        pctInput.disabled = true;
+        saveBtn.disabled = true;
+    } else {
+        const prof = state.profissionais.find(p => p.nome === name);
+        if (prof) {
+            pctInput.value = prof.pct;
+            pctInput.disabled = false;
+            saveBtn.disabled = false;
+        }
+    }
+}
+
+function saveEditedCommission(){
+    const name = document.getElementById('editProfSelect').value;
+    const newPct = Number(document.getElementById('editProfPct').value);
+    
+    if (!name || newPct < 0 || newPct > 100) return alert("Selecione um profissional e uma comissão válida (0-100).");
+    
+    const index = state.profissionais.findIndex(p => p.nome === name);
+    if (index !== -1) {
+        state.profissionais[index].pct = newPct;
+        saveState();
+        toast(`Comissão de ${name} atualizada para ${newPct}%`);
+        updateProfTable();
+        loadProfCommission("");
+    }
+}
+
+function updateProfTable(){
+    const tbody = document.querySelector('#profTable tbody');
+    tbody.innerHTML = state.profissionais.map((p, i)=>`
+        <tr>
+            <td>${p.nome}</td>
+            <td class="t-right">${p.pct}%</td>
+            <td style="text-align:center;">
+                <button class="btn" style="padding:4px 8px; background:var(--bad); border-color:var(--bad);" onclick="deleteProfissional(${i})">X</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function addProfissional(){
+    const name = document.getElementById('newProfName').value.trim();
+    const pct = Number(document.getElementById('newProfPct').value);
+    if (!name) return alert("O nome do profissional é obrigatório.");
+    if (state.profissionais.some(p => p.nome.toLowerCase() === name.toLowerCase())) return alert("Profissional já existe.");
+
+    state.profissionais.push({ nome: name, pct: pct });
+    saveState();
+    document.getElementById('newProfName').value = '';
+    document.getElementById('newProfPct').value = 50;
+    updateProfTable();
+    toast(`Profissional ${name} adicionado.`);
+    
+    if (document.getElementById('sProf')) document.getElementById('sProf').innerHTML = getProfissionaisOptions();
+    if (document.getElementById('pgProf')) document.getElementById('pgProf').innerHTML = getProfissionaisOptions();
+    if (document.getElementById('editProfSelect')) document.getElementById('editProfSelect').innerHTML = `<option value="">-- Selecione um Profissional --</option>` + getProfissionaisOptions();
+}
+
+function deleteProfissional(index){
+    const name = state.profissionais[index].nome;
+    if (!confirm(`Tem certeza que deseja remover ${name}? Todas as vendas e pagamentos passados serão mantidos, mas o profissional não estará mais disponível para novas vendas.`)) return;
+    
+    state.profissionais.splice(index, 1);
+    saveState();
+    updateProfTable();
+    toast("Profissional removido");
+    
+    if (document.getElementById('sProf')) document.getElementById('sProf').innerHTML = getProfissionaisOptions();
+    if (document.getElementById('pgProf')) document.getElementById('pgProf').innerHTML = getProfissionaisOptions();
+    if (document.getElementById('editProfSelect')) document.getElementById('editProfSelect').innerHTML = `<option value="">-- Selecione um Profissional --</option>` + getProfissionaisOptions();
+}
+
+/* ===================== RELATÓRIOS ======================= */
+function renderPageRelatorios(){
+    const root = document.getElementById('appRoot');
+    const optsProf = `<option value="">Todos</option>` + state.profissionais.map(p=>`<option>${p.nome}</option>`).join("");
+    
+    root.innerHTML = `
+    <div class="card">
+      <header><div>Relatório de Pagamentos e Vendas</div></header>
+      <div class="content">
+        <div class="grid cols-3">
+          <div><label>Profissional</label><select id="rptProf">${optsProf}</select></div>
+          <div><label>Data Início</label><input type="date" id="rptStart"></div>
+          <div><label>Data Fim</label><input type="date" id="rptEnd"></div>
+        </div>
+        <hr class="sep">
+        <button class="btn" id="btnRunReport">Gerar Relatório</button>
+        
+        <hr class="sep">
+        <h3 style="margin-bottom: 8px;">Pagamentos Realizados</h3>
+        <p class="small">Pagamentos realizados ao profissional no período selecionado.</p>
+        <div style="overflow-x: auto;"><table id="pagamentosReport" style="width: 100%; min-width: 400px;">
+          <thead><tr><th>Data/Hora</th><th>Profissional</th><th class="t-right">Valor (R$)</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <div class="t-right" style="margin-top:10px; font-weight: bold;">Total Pago no Período: <span id="totalPago">R$ 0,00</span></div>
+        
+        <h3 style="margin-top: 20px; margin-bottom: 8px;">Vendas e Comissões</h3>
+        <p class="small">Vendas realizadas por profissional no período. Use para calcular o saldo pendente.</p>
+        <div style="overflow-x: auto;"><table id="vendasReport" style="width: 100%; min-width: 400px;">
+          <thead><tr><th>Data/Hora</th><th>Tipo</th><th>Serviço/Produto</th><th class="t-right">Venda (R$)</th><th class="t-right">Comissão (R$)</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <div class="t-right" style="margin-top:10px; font-weight: bold;">Total Comissão no Período: <span id="totalComissao">R$ 0,00</span></div>
+      </div>
+    </div>`;
+
+    document.getElementById('btnRunReport').onclick = runReport;
+}
+
+function runReport(){
+    const profName = document.getElementById('rptProf').value;
+    const start = document.getElementById('rptStart').value;
+    const end = document.getElementById('rptEnd').value;
+
+    const startDate = start ? new Date(start + 'T00:00:00').getTime() : 0;
+    const endDate = end ? (new Date(end + 'T00:00:00').getTime() + 86400000) : Date.now() + 86400000;
+    
+    if (startDate >= endDate) return alert("A Data Fim deve ser posterior à Data Início.");
+
+    let pagamentos = state.pagamentos.filter(p => p.ts >= startDate && p.ts < endDate);
+    if (profName) pagamentos = pagamentos.filter(p => p.prof === profName);
+
+    let vendas = state.vendas.filter(v => v.ts >= startDate && v.ts < endDate);
+    if (profName) vendas = vendas.filter(v => v.prof === profName);
+    
+    const tbodyPag = document.querySelector('#pagamentosReport tbody');
+    let totalPago = 0;
+    tbodyPag.innerHTML = pagamentos.map(p => {
+        totalPago += p.valor;
+        return `<tr>
+            <td>${new Date(p.ts).toLocaleString('pt-BR')}</td>
+            <td>${p.prof}</td>
+            <td class="t-right">R$ ${p.valor.toFixed(2).replace('.', ',')}</td>
+        </tr>`;
+    }).join('');
+    document.getElementById('totalPago').textContent = `R$ ${totalPago.toFixed(2).replace('.', ',')}`;
+
+    const tbodyVendas = document.querySelector('#vendasReport tbody');
+    let totalComissao = 0;
+    tbodyVendas.innerHTML = vendas.map(v => {
+        totalComissao += (v.comissao || 0);
+        const tipoLabel = v.tipo === 'S' ? 'Serviço' : 'Produto';
+        const nomeItem = v.nome + (v.qtd > 1 ? ` (${v.qtd}x)` : '');
+        return `<tr>
+            <td>${new Date(v.ts).toLocaleString('pt-BR')}</td>
+            <td>${tipoLabel}</td>
+            <td>${nomeItem}</td>
+            <td class="t-right">R$ ${v.preco.toFixed(2).replace('.', ',')}</td>
+            <td class="t-right">R$ ${(v.comissao || 0).toFixed(2).replace('.', ',')}</td>
+        </tr>`;
+    }).join('');
+    document.getElementById('totalComissao').textContent = `R$ ${totalComissao.toFixed(2).replace('.', ',')}`;
+
+    toast("Relatório gerado!");
+}
+
+/* ===================== CATALOG (CRUD) - REFACTOR ======================= */
+function addNewCatalogItem(){
+  const tbody = document.querySelector('#catalog-table tbody');
+  const tempName = `NOVO ITEM ${tbody.children.length + 1}`;
+
+  const isService = currentCatalogType === 'servico';
+  const val2 = isService ? 0 : 1;
+  const col3 = isService ? 'Duração (min)' : 'Estoque Inicial';
+  const type2 = isService ? 'number' : 'number';
+
+  const newRow = document.createElement('tr');
+  newRow.setAttribute('data-name', tempName);
+  newRow.innerHTML = `
+    <td><input class="new-name" type="text" value="${tempName}"></td>
+    <td class="t-right"><input type="number" min="0" step="0.5" value="0.00" style="text-align:right"></td>
+    <td class="t-right"><input type="${type2}" min="0" step="${isService ? 5 : 1}" value="${val2}" style="text-align:right"></td>
+    <td style="text-align:center;">
+      <button class="btn" style="padding:4px 8px; background:var(--bad); border-color:var(--bad);" onclick="this.closest('tr').remove()">X</button>
+    </td>
+  `;
+  tbody.prepend(newRow);
+  newRow.querySelector('.new-name').focus();
+}
+
+function openCatalog(type){
+  currentCatalogType = type;
+  const isService = type === 'servico';
+  const list = isService ? state.servicos_catalogo : state.produtos_estoque;
+  const defaults = isService ? SERVICE_DEFAULTS : PRODUCT_DEFAULTS;
+
+  const overlay = document.getElementById('catalog-overlay');
+  const tbody = document.querySelector('#catalog-table tbody');
+  const header = document.getElementById('catalog-table-header');
+  const title = document.getElementById('catalog-title');
+  const instructions = document.getElementById('catalog-instructions');
+  
+  document.getElementById('catalog-add').onclick = addNewCatalogItem;
+
+  title.textContent = isService ? "Gerenciar Serviços" : "Gerenciar Produtos (Estoque)";
+  instructions.textContent = isService 
+    ? "Defina Preço (R$) e Duração (min). Salvo neste dispositivo."
+    : "Defina Preço (R$) e Quantidade em Estoque. Salvo neste dispositivo. Você pode remover itens clicando no (X).";
+
+  header.innerHTML = `
+    <th style="min-width:280px">${isService ? 'Serviço' : 'Produto'}</th>
+    <th class="t-right" style="min-width:120px">Preço (R$)</th>
+    <th class="t-right" style="min-width:140px">${isService ? 'Duração (min)' : 'Estoque (und)'}</th>
+    <th style="width:50px"></th> 
+  `;
+
+  const base = new Map();
+  defaults.forEach(d => base.set(d.nome.toLowerCase(), { ...d, originalName: d.nome }));
+
+  list.forEach(s => {
+    const key = s.nome.toLowerCase();
+    if (base.has(key)) {
+      const cur = base.get(key);
+      cur.preco = s.preco;
+      if(isService) cur.duracao = s.duracao;
+      else cur.qtd = s.qtd;
+    } else {
+      const customItem = { nome: s.nome, preco: s.preco||0, originalName: s.nome, isCustom: true };
+      if(isService) customItem.duracao = s.duracao||0;
+      else customItem.qtd = s.qtd||0;
+      base.set(key, customItem);
+    }
+  });
+
+  const rows = Array.from(base.values()).sort((a,b)=> a.nome.localeCompare(b.nome));
+  
+  tbody.innerHTML = rows.map(item => {
+    const value2 = isService ? item.duracao : item.qtd;
+    const inputType2 = isService ? 'number' : 'number';
+    const step2 = isService ? 5 : 1;
+    
+    return `<tr data-name="${item.nome.replace(/"/g,'&quot;')}">
+      <td><input type="text" value="${item.nome}" ${!item.isCustom ? 'disabled' : ''}></td>
+      <td class="t-right"><input type="number" min="0" step="0.5" value="${item.preco}" style="text-align:right"></td>
+      <td class="t-right"><input type="${inputType2}" min="0" step="${step2}" value="${value2}" style="text-align:right"></td>
+      <td style="text-align:center;">
+        <button class="btn" style="padding:4px 8px; background:var(--bad); border-color:var(--bad);" onclick="this.closest('tr').remove()">X</button>
+      </td>
+    </tr>`;
+  }).join("");
+  overlay.style.display = "flex";
+}
+function closeCatalog(){ document.getElementById("catalog-overlay").style.display="none"; }
+
+function saveCatalog(){
+  const isService = currentCatalogType === 'servico';
+  const rows = Array.from(document.querySelectorAll("#catalog-table tbody tr"));
+  const out = [];
+  const names = new Set();
+
+  for(const tr of rows){
+    const nomeInput = tr.querySelector('td:first-child input');
+    const nome = (nomeInput.value || tr.getAttribute("data-name")).trim();
+    
+    if (!nome) continue; 
+    if (names.has(nome.toLowerCase())) {
+        alert(`O item "${nome}" está duplicado. Por favor, corrija.`);
+        return;
+    }
+    names.add(nome.toLowerCase());
+    
+    const preco = Number(tr.children[1].querySelector("input").value||0);
+    const value2 = Number(tr.children[2].querySelector("input").value||0);
+    
+    const item = {nome:nome, preco};
+    if (isService) item.duracao = value2;
+    else item.qtd = value2;
+
+    out.push(item);
+  };
+  
+  if (isService) state.servicos_catalogo = out;
+  else state.produtos_estoque = out;
+
+  saveState();
+  toast(isService ? "Catálogo de Serviços salvo." : "Estoque de Produtos salvo.");
+  closeCatalog();
+  
+  // Atualiza a tela de Vendas caso o estoque tenha mudado
+  if (document.getElementById('sItem')) document.getElementById('sItem').innerHTML = getAllItemsOptions();
+}
+
+function resetCatalog(){
+  const isService = currentCatalogType === 'servico';
+  const confirmationText = isService
+    ? "ATENÇÃO: Isso irá APAGAR todas as edições personalizadas de serviços. Tem certeza que deseja restaurar os padrões de serviços?"
+    : "ATENÇÃO: Isso irá APAGAR todas as edições personalizadas de produtos e restaurar o estoque inicial. Tem certeza que deseja restaurar os padrões de produtos?";
+
+  if (!confirm(confirmationText)) return;
+  
+  if (isService) state.servicos_catalogo = SERVICE_DEFAULTS.map(d=>({nome:d.nome, preco:d.preco, duracao:d.duracao}));
+  else state.produtos_estoque = PRODUCT_DEFAULTS.map(d=>({...d}));
+  
+  saveState();
+  openCatalog(currentCatalogType);
+  toast("Catálogo restaurado para os padrões.");
+
+  if (document.getElementById('sItem')) document.getElementById('sItem').innerHTML = getAllItemsOptions();
+}
+
+document.getElementById('catalog-close').onclick = closeCatalog;
+document.getElementById('catalog-save').onclick = saveCatalog;
+document.getElementById('catalog-reset').onclick = resetCatalog;
+
+/* ===================== EXPORT / IMPORT (MERGE + RELATÓRIO) ======================= */
+function exportAll(){
+  const data = JSON.stringify(state, null, 2);
+  const blob = new Blob([data], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = "DELTA_EXPORT.json";
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("Dados exportados para DELTA_EXPORT.json");
+}
+
+function mergeImport(obj){
+  const report = { inseridos:0, atualizados:0, conflitos:0, erros:0, detalhes:[] };
+  try{
+    // Profissionais
+    const names = new Set(state.profissionais.map(p=>p.nome.toLowerCase()));
+    (obj.profissionais||[]).forEach(p=>{
+      if(!names.has(p.nome.toLowerCase())){ state.profissionais.push(p); report.inseridos++; names.add(p.nome.toLowerCase()); }
+    });
+    // Serviços
+    const smap = new Map(state.servicos_catalogo.map(s=>[s.nome.toLowerCase(), s]));
+    (obj.servicos_catalogo||obj.servicos||[]).forEach(s=>{ // Compatibilidade com v1 (obj.servicos)
+      if(!smap.has(s.nome.toLowerCase())){ 
+        state.servicos_catalogo.push(s); report.inseridos++; smap.set(s.nome.toLowerCase(), s); 
+      }
+      else {
+        const cur = smap.get(s.nome.toLowerCase());
+        if(cur.preco!==s.preco || cur.duracao!==s.duracao){
+          cur.preco = s.preco; cur.duracao = s.duracao; report.atualizados++;
+        }
+      }
+    });
+    // Produtos (novo)
+    const pmap = new Map(state.produtos_estoque.map(p=>[p.nome.toLowerCase(), p]));
+    (obj.produtos_estoque||[]).forEach(p=>{
+      if(!pmap.has(p.nome.toLowerCase())){ 
+        state.produtos_estoque.push(p); report.inseridos++; pmap.set(p.nome.toLowerCase(), p); 
+      }
+      else {
+        const cur = pmap.get(p.nome.toLowerCase());
+        if(cur.preco!==p.preco || cur.qtd!==p.qtd){
+          cur.preco = p.preco; cur.qtd = p.qtd; report.atualizados++;
+        }
+      }
+    });
+    
+    // Vendas e Pagamentos
+    if (Array.isArray(obj.vendas)){ state.vendas = state.vendas.concat(obj.vendas); report.inseridos += obj.vendas.length; }
+    if (Array.isArray(obj.pagamentos)){ state.pagamentos = state.pagamentos.concat(obj.pagamentos); report.inseridos += obj.pagamentos.length; }
+    
+    if (obj.lastUpdated && obj.lastUpdated > state.lastUpdated) {
+        state.lastUpdated = obj.lastUpdated;
+    }
+    
+    saveState();
+  }catch(e){
+    report.erros++; report.detalhes.push("Erro: "+e.message);
+  }
+  alert("Importação (merge) concluída:\n" + JSON.stringify(report, null, 2));
+  renderPage('Dashboard');
+}
+
+document.getElementById('fab-export').onclick = exportAll;
+document.getElementById('fab-import').onclick = ()=> document.getElementById('importFile').click();
+document.getElementById('importFile').addEventListener('change', function(ev){
+  const f = ev.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{ const obj = JSON.parse(r.result); mergeImport(obj); toast("Importado"); }
+    catch(e){ alert("Erro ao ler JSON: "+e.message); }
+  };
+  r.readAsText(f);
+});
+
+document.getElementById('fab-share').onclick = async ()=>{
+  try{
+    const data = {
+      title:"Delta/HCSS - App",
+      text:"Link para o Aplicativo Delta HCSS",
+      url: location.href
+    };
+    if (navigator.share){ 
+        await navigator.share(data); 
+    }
+    else { 
+        await navigator.clipboard.writeText(location.href); 
+        toast("Link copiado para a área de transferência"); 
+    }
+  }catch(e){ console.warn(e); }
+};
+document.getElementById('fab-lock').onclick = ()=>{
+  if (confirm("Bloquear o app e exigir login novamente?")){
+    logout();
+    toast("Bloqueado. Requer novo login.");
+  }
+};
+
+/* ===================== ROUTER / BOOT ======================= */
+document.getElementById('btnLogout').onclick = logout;
+
+function boot(){
+  localStorage.removeItem(SESSION_KEY); 
+  
+  if (isLogged()){
+    setAuthUI(true); renderPage('Dashboard');
+  } else {
+    setAuthUI(false); renderLogin();
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
