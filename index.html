@@ -173,9 +173,18 @@ let state = loadState() || {
 };
 let currentCatalogType = null; // 'servico' or 'produto'
 
-function saveState(){ 
+// Debounced save to reduce localStorage writes
+let saveTimeout = null;
+function saveState(immediate = false){ 
   state.lastUpdated = Date.now();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); 
+  if (immediate) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return;
+  }
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, 300);
 }
 function loadState(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||""); }catch(_){ return null; } }
 function toast(t){ const el=document.createElement('div');el.className='toast';el.textContent=t;document.body.appendChild(el);setTimeout(()=>{el.remove()},2200); }
@@ -223,29 +232,52 @@ function renderTabs(auth){
   });
 }
 
+// Cache for profissionais options to avoid rebuilding
+let cachedProfOptions = null;
+let lastProfHash = null;
+
 function getProfissionaisOptions(){
-    return state.profissionais.map(p=>`<option>${p.nome}</option>`).join("");
+    const currentHash = state.profissionais.map(p=>p.nome).join('|');
+    if (cachedProfOptions && lastProfHash === currentHash) {
+        return cachedProfOptions;
+    }
+    lastProfHash = currentHash;
+    cachedProfOptions = state.profissionais.map(p=>`<option>${p.nome}</option>`).join("");
+    return cachedProfOptions;
 }
+
+// Cache for items options to avoid rebuilding
+let cachedItemsOptions = null;
+let lastItemsHash = null;
 
 /**
  * Retorna as opções para o <select> de Vendas, unindo Serviços e Produtos.
  * O valor (value) é formatado como TIPO|NOME, onde TIPO é S (serviço) ou P (produto).
  */
 function getAllItemsOptions(){
-    let options = '<option value="">-- Selecione um Serviço ou Produto --</option>';
+    const currentHash = state.servicos_catalogo.map(s=>s.nome+s.preco).join('|') + 
+                        state.produtos_estoque.map(p=>p.nome+p.qtd).join('|');
+    if (cachedItemsOptions && lastItemsHash === currentHash) {
+        return cachedItemsOptions;
+    }
+    lastItemsHash = currentHash;
+    
+    const options = ['<option value="">-- Selecione um Serviço ou Produto --</option>'];
     
     // 1. Serviços
-    options += state.servicos_catalogo
-        .map(s => `<option value="S|${s.nome}">[Serviço] ${s.nome} (R$ ${s.preco.toFixed(2).replace('.', ',')})</option>`)
-        .join("");
+    for (const s of state.servicos_catalogo) {
+        options.push(`<option value="S|${s.nome}">[Serviço] ${s.nome} (R$ ${s.preco.toFixed(2).replace('.', ',')})</option>`);
+    }
 
     // 2. Produtos (só lista produtos em estoque > 0)
-    options += state.produtos_estoque
-        .filter(p => p.qtd > 0)
-        .map(p => `<option value="P|${p.nome}">[Produto] ${p.nome} (Estoque: ${p.qtd})</option>`)
-        .join("");
+    for (const p of state.produtos_estoque) {
+        if (p.qtd > 0) {
+            options.push(`<option value="P|${p.nome}">[Produto] ${p.nome} (Estoque: ${p.qtd})</option>`);
+        }
+    }
     
-    return options;
+    cachedItemsOptions = options.join('');
+    return cachedItemsOptions;
 }
 
 function renderPage(name){
@@ -471,6 +503,7 @@ function registerVenda(){
             return alert(`Estoque insuficiente! Apenas ${prod.qtd} unidades de ${nome} disponíveis.`);
         }
         prod.qtd -= qtd; // DEDUÇÃO DE ESTOQUE
+        invalidateCaches(); // Invalidate cache since stock changed
     }
 
     state.vendas.push({ ts: Date.now(), prof: profName, tipo, nome, preco: precoTotal, dur, comissao, qtd });
@@ -483,20 +516,39 @@ function registerVenda(){
     syncItemDetails(document.getElementById('sItem').value);
 }
 
+// Cache dashboard calculations
+let cachedDashboard = null;
+let lastDashboardCalc = 0;
+
 function updateDashboard(){
-  const today = new Date(); today.setHours(0,0,0,0);
+  const now = Date.now();
+  const today = new Date();
+  today.setHours(0,0,0,0);
   const todayTS = today.getTime();
   
-  const vendasHoje = state.vendas.filter(v=>{ const d=new Date(v.ts); d.setHours(0,0,0,0); return d.getTime()===todayTS; });
-  const receita = vendasHoje.reduce((a,b)=>a+(b.preco||0),0);
-  
-  const totalComissoes = state.vendas.reduce((sum, v) => sum + (v.comissao || 0), 0);
-  const totalPagamentos = state.pagamentos.reduce((sum, p) => sum + (p.valor || 0), 0);
-  const pendente = totalComissoes - totalPagamentos;
+  // Recalculate if cache is older than 1 second or state changed
+  if (!cachedDashboard || now - lastDashboardCalc > 1000 || state.lastUpdated > lastDashboardCalc) {
+    const vendasHoje = state.vendas.filter(v=>{ const d=new Date(v.ts); d.setHours(0,0,0,0); return d.getTime()===todayTS; });
+    const receita = vendasHoje.reduce((a,b)=>a+(b.preco||0),0);
+    
+    const totalComissoes = state.vendas.reduce((sum, v) => sum + (v.comissao || 0), 0);
+    const totalPagamentos = state.pagamentos.reduce((sum, p) => sum + (p.valor || 0), 0);
+    const pendente = totalComissoes - totalPagamentos;
+    
+    cachedDashboard = {
+      vendasCount: vendasHoje.length,
+      receita: receita.toFixed(2).replace(".",","),
+      pendente: pendente.toFixed(2).replace(".",",")
+    };
+    lastDashboardCalc = now;
+  }
 
-  const el1 = document.getElementById('boxVendasHoje'); if(el1) el1.textContent = vendasHoje.length;
-  const el2 = document.getElementById('boxReceita'); if(el2) el2.textContent = receita.toFixed(2).replace(".",",");
-  const el3 = document.getElementById('boxPendente'); if(el3) el3.textContent = pendente.toFixed(2).replace(".",",");
+  const el1 = document.getElementById('boxVendasHoje'); 
+  if(el1) el1.textContent = cachedDashboard.vendasCount;
+  const el2 = document.getElementById('boxReceita'); 
+  if(el2) el2.textContent = cachedDashboard.receita;
+  const el3 = document.getElementById('boxPendente'); 
+  if(el3) el3.textContent = cachedDashboard.pendente;
 }
 
 /* ===================== LOGIN PAGE ======================= */
@@ -630,15 +682,27 @@ function saveEditedCommission(){
 
 function updateProfTable(){
     const tbody = document.querySelector('#profTable tbody');
-    tbody.innerHTML = state.profissionais.map((p, i)=>`
+    const rows = [];
+    for (let i = 0; i < state.profissionais.length; i++) {
+        const p = state.profissionais[i];
+        rows.push(`
         <tr>
             <td>${p.nome}</td>
             <td class="t-right">${p.pct}%</td>
             <td style="text-align:center;">
                 <button class="btn" style="padding:4px 8px; background:var(--bad); border-color:var(--bad);" onclick="deleteProfissional(${i})">X</button>
             </td>
-        </tr>
-    `).join('');
+        </tr>`);
+    }
+    tbody.innerHTML = rows.join('');
+}
+
+// Helper to invalidate cached options
+function invalidateCaches() {
+    cachedProfOptions = null;
+    lastProfHash = null;
+    cachedItemsOptions = null;
+    lastItemsHash = null;
 }
 
 function addProfissional(){
@@ -648,15 +712,21 @@ function addProfissional(){
     if (state.profissionais.some(p => p.nome.toLowerCase() === name.toLowerCase())) return alert("Profissional já existe.");
 
     state.profissionais.push({ nome: name, pct: pct });
+    invalidateCaches();
     saveState();
     document.getElementById('newProfName').value = '';
     document.getElementById('newProfPct').value = 50;
     updateProfTable();
     toast(`Profissional ${name} adicionado.`);
     
-    if (document.getElementById('sProf')) document.getElementById('sProf').innerHTML = getProfissionaisOptions();
-    if (document.getElementById('pgProf')) document.getElementById('pgProf').innerHTML = getProfissionaisOptions();
-    if (document.getElementById('editProfSelect')) document.getElementById('editProfSelect').innerHTML = `<option value="">-- Selecione um Profissional --</option>` + getProfissionaisOptions();
+    const profOpts = getProfissionaisOptions();
+    const sProf = document.getElementById('sProf');
+    const pgProf = document.getElementById('pgProf');
+    const editProfSelect = document.getElementById('editProfSelect');
+    
+    if (sProf) sProf.innerHTML = profOpts;
+    if (pgProf) pgProf.innerHTML = profOpts;
+    if (editProfSelect) editProfSelect.innerHTML = `<option value="">-- Selecione um Profissional --</option>` + profOpts;
 }
 
 function deleteProfissional(index){
@@ -664,13 +734,19 @@ function deleteProfissional(index){
     if (!confirm(`Tem certeza que deseja remover ${name}? Todas as vendas e pagamentos passados serão mantidos, mas o profissional não estará mais disponível para novas vendas.`)) return;
     
     state.profissionais.splice(index, 1);
+    invalidateCaches();
     saveState();
     updateProfTable();
     toast("Profissional removido");
     
-    if (document.getElementById('sProf')) document.getElementById('sProf').innerHTML = getProfissionaisOptions();
-    if (document.getElementById('pgProf')) document.getElementById('pgProf').innerHTML = getProfissionaisOptions();
-    if (document.getElementById('editProfSelect')) document.getElementById('editProfSelect').innerHTML = `<option value="">-- Selecione um Profissional --</option>` + getProfissionaisOptions();
+    const profOpts = getProfissionaisOptions();
+    const sProf = document.getElementById('sProf');
+    const pgProf = document.getElementById('pgProf');
+    const editProfSelect = document.getElementById('editProfSelect');
+    
+    if (sProf) sProf.innerHTML = profOpts;
+    if (pgProf) pgProf.innerHTML = profOpts;
+    if (editProfSelect) editProfSelect.innerHTML = `<option value="">-- Selecione um Profissional --</option>` + profOpts;
 }
 
 /* ===================== RELATÓRIOS ======================= */
@@ -722,38 +798,42 @@ function runReport(){
     
     if (startDate >= endDate) return alert("A Data Fim deve ser posterior à Data Início.");
 
-    let pagamentos = state.pagamentos.filter(p => p.ts >= startDate && p.ts < endDate);
-    if (profName) pagamentos = pagamentos.filter(p => p.prof === profName);
-
-    let vendas = state.vendas.filter(v => v.ts >= startDate && v.ts < endDate);
-    if (profName) vendas = vendas.filter(v => v.prof === profName);
+    // Filter once, reuse filtered arrays
+    const filteredPagamentos = state.pagamentos.filter(p => p.ts >= startDate && p.ts < endDate && (!profName || p.prof === profName));
+    const filteredVendas = state.vendas.filter(v => v.ts >= startDate && v.ts < endDate && (!profName || v.prof === profName));
     
     const tbodyPag = document.querySelector('#pagamentosReport tbody');
     let totalPago = 0;
-    tbodyPag.innerHTML = pagamentos.map(p => {
+    const pagRows = [];
+    
+    for (const p of filteredPagamentos) {
         totalPago += p.valor;
-        return `<tr>
+        pagRows.push(`<tr>
             <td>${new Date(p.ts).toLocaleString('pt-BR')}</td>
             <td>${p.prof}</td>
             <td class="t-right">R$ ${p.valor.toFixed(2).replace('.', ',')}</td>
-        </tr>`;
-    }).join('');
+        </tr>`);
+    }
+    tbodyPag.innerHTML = pagRows.join('');
     document.getElementById('totalPago').textContent = `R$ ${totalPago.toFixed(2).replace('.', ',')}`;
 
     const tbodyVendas = document.querySelector('#vendasReport tbody');
     let totalComissao = 0;
-    tbodyVendas.innerHTML = vendas.map(v => {
+    const vendaRows = [];
+    
+    for (const v of filteredVendas) {
         totalComissao += (v.comissao || 0);
         const tipoLabel = v.tipo === 'S' ? 'Serviço' : 'Produto';
         const nomeItem = v.nome + (v.qtd > 1 ? ` (${v.qtd}x)` : '');
-        return `<tr>
+        vendaRows.push(`<tr>
             <td>${new Date(v.ts).toLocaleString('pt-BR')}</td>
             <td>${tipoLabel}</td>
             <td>${nomeItem}</td>
             <td class="t-right">R$ ${v.preco.toFixed(2).replace('.', ',')}</td>
             <td class="t-right">R$ ${(v.comissao || 0).toFixed(2).replace('.', ',')}</td>
-        </tr>`;
-    }).join('');
+        </tr>`);
+    }
+    tbodyVendas.innerHTML = vendaRows.join('');
     document.getElementById('totalComissao').textContent = `R$ ${totalComissao.toFixed(2).replace('.', ',')}`;
 
     toast("Relatório gerado!");
@@ -810,9 +890,11 @@ function openCatalog(type){
   `;
 
   const base = new Map();
-  defaults.forEach(d => base.set(d.nome.toLowerCase(), { ...d, originalName: d.nome }));
+  for (const d of defaults) {
+    base.set(d.nome.toLowerCase(), { ...d, originalName: d.nome });
+  }
 
-  list.forEach(s => {
+  for (const s of list) {
     const key = s.nome.toLowerCase();
     if (base.has(key)) {
       const cur = base.get(key);
@@ -825,24 +907,26 @@ function openCatalog(type){
       else customItem.qtd = s.qtd||0;
       base.set(key, customItem);
     }
-  });
+  }
 
   const rows = Array.from(base.values()).sort((a,b)=> a.nome.localeCompare(b.nome));
+  const rowsHtml = [];
   
-  tbody.innerHTML = rows.map(item => {
+  for (const item of rows) {
     const value2 = isService ? item.duracao : item.qtd;
-    const inputType2 = isService ? 'number' : 'number';
+    const inputType2 = 'number';
     const step2 = isService ? 5 : 1;
     
-    return `<tr data-name="${item.nome.replace(/"/g,'&quot;')}">
+    rowsHtml.push(`<tr data-name="${item.nome.replace(/"/g,'&quot;')}">
       <td><input type="text" value="${item.nome}" ${!item.isCustom ? 'disabled' : ''}></td>
       <td class="t-right"><input type="number" min="0" step="0.5" value="${item.preco}" style="text-align:right"></td>
       <td class="t-right"><input type="${inputType2}" min="0" step="${step2}" value="${value2}" style="text-align:right"></td>
       <td style="text-align:center;">
         <button class="btn" style="padding:4px 8px; background:var(--bad); border-color:var(--bad);" onclick="this.closest('tr').remove()">X</button>
       </td>
-    </tr>`;
-  }).join("");
+    </tr>`);
+  }
+  tbody.innerHTML = rowsHtml.join("");
   overlay.style.display = "flex";
 }
 function closeCatalog(){ document.getElementById("catalog-overlay").style.display="none"; }
@@ -858,11 +942,12 @@ function saveCatalog(){
     const nome = (nomeInput.value || tr.getAttribute("data-name")).trim();
     
     if (!nome) continue; 
-    if (names.has(nome.toLowerCase())) {
+    const nomeLower = nome.toLowerCase();
+    if (names.has(nomeLower)) {
         alert(`O item "${nome}" está duplicado. Por favor, corrija.`);
         return;
     }
-    names.add(nome.toLowerCase());
+    names.add(nomeLower);
     
     const preco = Number(tr.children[1].querySelector("input").value||0);
     const value2 = Number(tr.children[2].querySelector("input").value||0);
@@ -872,17 +957,19 @@ function saveCatalog(){
     else item.qtd = value2;
 
     out.push(item);
-  };
+  }
   
   if (isService) state.servicos_catalogo = out;
   else state.produtos_estoque = out;
 
-  saveState();
+  invalidateCaches();
+  saveState(true); // Force immediate save for catalog changes
   toast(isService ? "Catálogo de Serviços salvo." : "Estoque de Produtos salvo.");
   closeCatalog();
   
   // Atualiza a tela de Vendas caso o estoque tenha mudado
-  if (document.getElementById('sItem')) document.getElementById('sItem').innerHTML = getAllItemsOptions();
+  const sItem = document.getElementById('sItem');
+  if (sItem) sItem.innerHTML = getAllItemsOptions();
 }
 
 function resetCatalog(){
@@ -896,11 +983,13 @@ function resetCatalog(){
   if (isService) state.servicos_catalogo = SERVICE_DEFAULTS.map(d=>({nome:d.nome, preco:d.preco, duracao:d.duracao}));
   else state.produtos_estoque = PRODUCT_DEFAULTS.map(d=>({...d}));
   
-  saveState();
+  invalidateCaches();
+  saveState(true); // Force immediate save
   openCatalog(currentCatalogType);
   toast("Catálogo restaurado para os padrões.");
 
-  if (document.getElementById('sItem')) document.getElementById('sItem').innerHTML = getAllItemsOptions();
+  const sItem = document.getElementById('sItem');
+  if (sItem) sItem.innerHTML = getAllItemsOptions();
 }
 
 document.getElementById('catalog-close').onclick = closeCatalog;
